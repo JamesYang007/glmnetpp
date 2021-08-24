@@ -12,11 +12,14 @@ option(GLMNETPP_ENABLE_COVERAGE     "Build glmnetpp with coverage"      OFF)
 find_package(Eigen3 3.3 CONFIG REQUIRED NO_MODULE)
 message(STATUS "Eigen3 found at ${EIGEN3_INCLUDE_DIR}")
 
+# Set include dirs
+set(GLMNETPP_INCLUDEDIR "${${PROJECT_NAME}_SOURCE_DIR}/include")
+
 # Add this library as interface (header-only)
 add_library(${PROJECT_NAME} INTERFACE)
 
-target_include_directories(${PROJECT_NAME}
-  INTERFACE $<BUILD_INTERFACE:${${PROJECT_NAME}_SOURCE_DIR}/include>
+target_include_directories(${PROJECT_NAME} SYSTEM INTERFACE
+            $<BUILD_INTERFACE:${GLMNETPP_INCLUDEDIR}>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 # Set C++17 standard for project target
