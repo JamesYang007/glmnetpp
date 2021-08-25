@@ -3,8 +3,6 @@
 #include <glmnetpp_bits/core/elastic_net_config.hpp>
 #include <glmnetpp_bits/core/elastic_net_output.hpp>
 
-#include <iostream>
-
 namespace glmnetpp {
 namespace core {
  
@@ -39,6 +37,8 @@ inline ElasticNetOutput lasso_path(const Eigen::MatrixBase<XDerived>& X,
 
     vec_t resid = Xty / n;                      // jth component = residual from fitting 
                                                 // on current beta without jth comp.
+                                                
+    // TODO: have user decide whether to have a unordered map
     mat_t X_cov(p, p);                          // lazily caches X^T*X (only column vectors)
     std::vector<bool> X_cov_flags(p, false);    // contains whether column j of X_cov is set or not
 

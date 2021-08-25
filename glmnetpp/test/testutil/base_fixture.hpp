@@ -43,6 +43,20 @@ protected:
             EXPECT_NEAR(v1[i], v2[i], tol);
         }
     }
+
+    template <class MatType1, class MatType2>
+    void expect_near_mat(const MatType1& m1,
+                         const MatType2& m2,
+                         double tol=0)
+    {
+        EXPECT_EQ(m1.rows(), m2.rows());
+        EXPECT_EQ(m1.cols(), m2.cols());
+        for (index_t j = 0; j < m1.cols(); ++j) {
+            for (index_t i = 0; i < m1.rows(); ++i) {
+                EXPECT_NEAR(m1(i,j), m2(i,j), tol);
+            }
+        }
+    }
 };
 
 } // namespace glmnetpp

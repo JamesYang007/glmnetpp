@@ -87,6 +87,9 @@ if (GLMNETPP_ENABLE_EXAMPLE)
 endif()
 
 if (GLMNETPP_ENABLE_BENCHMARK)
+    find_package(benchmark REQUIRED
+        HINTS ${CMAKE_CURRENT_SOURCE_DIR}/../../benchmark/build)
+
     # add benchmark subdirectory
     add_subdirectory(${PROJECT_SOURCE_DIR}/benchmark ${PROJECT_BINARY_DIR}/benchmark)
 endif()

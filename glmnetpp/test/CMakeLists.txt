@@ -50,3 +50,8 @@ if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_link_libraries(core_unittest pthread)
 endif()
 add_test(core_unittest core_unittest)
+
+add_custom_command(TARGET core_unittest PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${CMAKE_CURRENT_SOURCE_DIR}/testutil/data
+                   $<TARGET_FILE_DIR:core_unittest>/data)
