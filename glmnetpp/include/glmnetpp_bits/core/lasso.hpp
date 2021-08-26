@@ -2,6 +2,7 @@
 #include <Eigen/Core>
 #include <glmnetpp_bits/core/elastic_net_config.hpp>
 #include <glmnetpp_bits/core/elastic_net_output.hpp>
+#include <unordered_set>
 
 namespace glmnetpp {
 namespace core {
@@ -24,8 +25,14 @@ inline ElasticNetOutput lasso_path(const Eigen::MatrixBase<XDerived>& X,
     auto n = X.rows();
     auto p = X.cols();
 
+    // Try putting everything on one contiguous memory
+    mat_t buffer(p, 2 + p);
+    Eigen::Map<vec_t> Xty(buffer.col(0).data(), p);
+    Eigen::Map<vec_t> loo_beta(buffer.col(1).data(), p);
+    Eigen::Map<mat_t> X_cov(buffer.col(2).data(), p, p);
+
     // cache variables
-    vec_t Xty = X.transpose() * y;
+    Xty = X.transpose() * y;
     
     // setup rest of configuration
     config.setup(Xty, n);
@@ -35,12 +42,9 @@ inline ElasticNetOutput lasso_path(const Eigen::MatrixBase<XDerived>& X,
     output.beta.resize(p, config.nlambda);
     output.beta.col(0).setZero();
 
-    vec_t resid = Xty / n;                      // jth component = residual from fitting 
-                                                // on current beta without jth comp.
+    loo_beta = Xty / n;                     // jth component = current beta without jth comp (leave-one-out).
                                                 
-    // TODO: have user decide whether to have a unordered map
-    mat_t X_cov(p, p);                          // lazily caches X^T*X (only column vectors)
-    std::vector<bool> X_cov_flags(p, false);    // contains whether column j of X_cov is set or not
+    std::unordered_set<int> X_cov_flags;    // contains j if column j of X_cov is set 
 
     for (int l = 1; l < config.lambda->size(); ++l) {
         
@@ -56,30 +60,30 @@ inline ElasticNetOutput lasso_path(const Eigen::MatrixBase<XDerived>& X,
                 value_t old_beta_j = output.beta(j, l);
 
                 // check soft-max threshold
-                output.beta(j,l) = [lambda, j, &resid]() {
-                    if (lambda >= std::abs(resid[j])) return 0.;
-                    else if (resid[j] > 0) return resid[j] - lambda;
-                    else return resid[j] + lambda;
+                output.beta(j,l) = [lambda, j, &loo_beta]() {
+                    if (lambda >= std::abs(loo_beta[j])) return 0.;
+                    else if (loo_beta[j] > 0) return loo_beta[j] - lambda;
+                    else return loo_beta[j] + lambda;
                 }();
 
                 // update residuals only if beta_j changed
                 value_t beta_diff = old_beta_j - output.beta(j,l);
                 if (beta_diff != 0) {
-                    value_t cache_j = resid[j]; // for vectorization, we update everything including jth component,
+                    value_t cache_j = loo_beta[j]; // for vectorization, we update everything including jth component,
                                                 // then we replace the jth component with the old value.
                     
                     // update X covariance matrix column j if not set before
-                    if (!X_cov_flags[j]) {
-                        X_cov_flags[j] = true;
+                    if (X_cov_flags.find(j) == X_cov_flags.end()) {
+                        X_cov_flags.insert(j);
                         X_cov.col(j) = X.transpose() * X.col(j);
                     }
 
-                    resid += X_cov.col(j) * (beta_diff / n);
-                    resid[j] = cache_j;
-                }
+                    loo_beta += X_cov.col(j) * (beta_diff / n);
+                    loo_beta[j] = cache_j;
 
-                // update max abs diff of betas
-                max_abs_diff = std::max(max_abs_diff, std::abs(beta_diff));
+					// update max abs diff of betas
+					max_abs_diff = std::max(max_abs_diff, std::abs(beta_diff));
+                }
             }
 
             // eager exit if all coefficient (abs) differences are below tolerance 
