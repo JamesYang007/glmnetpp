@@ -37,7 +37,6 @@ BENCHMARK_REGISTER_F(lasso_stress_fixture,
  //->Arg(500)
  //->Arg(1000)
  //->Arg(2000)
- //->Arg(20000)
  ->Arg(20000)
     ;
 
