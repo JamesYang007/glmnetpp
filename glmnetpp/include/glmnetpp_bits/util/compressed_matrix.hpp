@@ -22,6 +22,7 @@ public:
 	using value_type = ValueType;
 
 	CompressedMatrixAlloc(size_t n_rows,
+						  size_t max_cols,
 						  size_t cap,
 						  size_t init_pool_size)
 		: buffer_pool_()
@@ -30,6 +31,7 @@ public:
 		, curr_idx_{0}
 		, col_capacity_{std::max(cap, static_cast<size_t>(1))}
 		, curr_col_size_{col_capacity_}
+		, max_cols_{max_cols}
 	{
 		assert(n_rows > 0);
 		buffer_pool_.reserve(init_pool_size);
@@ -41,6 +43,10 @@ public:
 		++n_cols_;
 		if (n_cols_ > col_capacity_) {
 			curr_col_size_ *= 2;
+			// if doubling current col size is too much
+			if (col_capacity_ + curr_col_size_ > max_cols_) {
+				curr_col_size_ = max_cols_ - col_capacity_;
+			}
 			buffer_pool_.emplace_back(new value_type[curr_col_size_ * n_rows_]);
 			curr_idx_ = 0;
 			col_capacity_ += curr_col_size_;
@@ -60,6 +66,7 @@ private:
 	size_t curr_idx_;			// current index to the next available part of buffer.
 	size_t col_capacity_;		// maximum number of columns that can be added with current allocations.
 	size_t curr_col_size_;		// current largest buffer size.
+	size_t max_cols_;			// maximum number of columns ever.
 };
 
 } // namespace details
@@ -92,6 +99,7 @@ public:
 					 size_t n_cols,
 					 size_t init_cols = 16)
 		: alloc_(n_rows, 
+				 n_cols,
 				 init_cols,
 				 static_cast<size_t>(std::log2(n_cols)))
 		, col_to_ptr_(n_cols, nullptr)
