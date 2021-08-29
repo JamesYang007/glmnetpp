@@ -61,20 +61,20 @@ private:
 			, class ExcludeActionType
 			, class GradVecType
 			, class ActionType>
-	static inline bool check_kkt_(const IncludeSubsetType& isub,
-						          const ExcludeActionType& esub_f,
-						          const GradVecType& grad,
-						          double lambda,
-						          ActionType f);
+	inline bool check_kkt_(const IncludeSubsetType& isub,
+                           const ExcludeActionType& esub_f,
+                           const GradVecType& grad,
+                           double lambda,
+                           ActionType f) const;
 
 	template <class ExcludeActionType
 			, class GradVecType
 			, class ActionType>
-	static inline bool check_kkt_(index_t p,
-                                  const ExcludeActionType& esub_f,
-						          const GradVecType& grad,
-						          double lambda,
-						          ActionType f);
+	inline bool check_kkt_(index_t p,
+                           const ExcludeActionType& esub_f,
+						   const GradVecType& grad,
+						   double lambda,
+						   ActionType f) const;
 
 	// at a given lambda, first iteration: go through all predictors,
 	// and update beta, X_cov, active_set/inv_active_set, and grad.
@@ -107,10 +107,10 @@ template <class IncludeSubsetType
         , class GradVecType
 		, class ActionType>
 inline bool Lasso::check_kkt_(const IncludeSubsetType& isub,
-					          const ExcludeActionType& esub_f,
+                              const ExcludeActionType& esub_f,
                               const GradVecType& grad,
                               double lambda,
-					          ActionType f)
+                              ActionType f) const
 {
 	// flag indicating whether kkt is met for all isub members
 	bool all_kkt_met = true;
@@ -133,10 +133,10 @@ template <class ExcludeActionType
 		, class GradVecType
 		, class ActionType>
 inline bool Lasso::check_kkt_(index_t p,
-							  const ExcludeActionType& esub_f,
-							  const GradVecType& grad,
-							  double lambda,
-							  ActionType f)
+                              const ExcludeActionType& esub_f,
+                              const GradVecType& grad,
+                              double lambda,
+                              ActionType f) const
 {
 	// flag indicating whether kkt is met for all isub members
 	bool all_kkt_met = true;
@@ -315,8 +315,10 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
 					return output_;
 				}
 				++iter;
+                auto old_beta = output_.beta.col(l-1);
+                auto new_beta = output_.beta.col(l);
 				auto update_state = update_approx_active_set_(
-					n, output_.beta.col(l-1), output_.beta.col(l), 
+					n, old_beta, new_beta, 
 					grad, X, X_cov, 
 					active_set, inv_active_set, inv_strong_set, lambda);
 

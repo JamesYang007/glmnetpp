@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <climits>
 #include <type_traits>
+#include <cmath>
 
 namespace glmnetpp {
 namespace util {
@@ -16,10 +17,11 @@ template <class IntType>
 inline constexpr IntType ilog2(IntType x)
 {
 	constexpr int n_bits = sizeof(IntType) * CHAR_BIT;
+    std::make_unsigned_t<IntType> ux = x;
 	std::make_unsigned_t<IntType> bit_mask = 1;
 	int i = 0;
 	for (; i < n_bits; ++i) {
-		if (bit_mask > x) break;
+		if (bit_mask > ux) break;
 		bit_mask <<= 1;
 	}
 	if (bit_mask == 0) return n_bits-1;

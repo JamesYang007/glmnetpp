@@ -3,6 +3,7 @@
 #include <vector>
 #include <cassert>
 #include <cmath>
+#include <memory>
 #include <glmnetpp_bits/util/math.hpp>
 
 namespace glmnetpp {

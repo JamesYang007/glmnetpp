@@ -11,7 +11,7 @@ struct ilog2_fixture :
 {
 	void SetUp() override
 	{
-		std::tie(in, expected) = GetParam();
+		std::tie(in, expected) = this->GetParam();
 	}
 
 protected:
