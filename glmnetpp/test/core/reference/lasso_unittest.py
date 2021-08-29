@@ -8,20 +8,32 @@ def lasso(X, y, l1, tol=1e-7, max_iter=100000, path_length=100, return_path=Fals
     l_max = max(list(abs(np.dot(np.transpose(X), y)))) / m
     l_path = np.geomspace(l_max, l1, path_length)
     coeffiecients = np.zeros((len(l_path), n))
+    iterr = 0
     for i in range(len(l_path)):
-        for j in range(max_iter):
-            print("{i}, {j}\n{B_star}".format(i=i, j=j, B_star=B_star))
+        print('Lambda {i} = {l}'.format(i=i, l = l_path[i]))
+        while 1:
+            if iterr == max_iter: break
             B_s = B_star.copy()
             for j in range(n):
-                k = np.where(B_s != 0)[0]
-                print(k)
-                update = (1/m)*((np.dot(X[:,j], y)- \
-                                np.dot(np.dot(X[:,j], X[:,k]), B_s[k]))) + \
-                                B_s[j]
+                k = np.where(B_star != 0)[0]
+                grad = (1/m)*((np.dot(X[:,j], y) - \
+                                np.dot(np.dot(X[:,j], X[:,k]), B_star[k])))
+                update = grad + B_star[j]
                 B_star[j] = (np.sign(update) * max(abs(update) - l_path[i], 0))
-            print(max(abs(B_s - B_star)))
-            if np.all(abs(B_s - B_star) < tol):
+
+                # debugging ==
+                k = np.where(B_star != 0)[0]
+                grad = (1/m)*((np.dot(np.transpose(X), y) - \
+                                np.dot(np.dot(np.transpose(X), X[:,k]), B_star[k])))
+                print('Iter {iterr}, Coef Index {coef_idx}, Coef = {coef}, Grad[{coef_idx}] after update = \n{g}'
+                      .format(iterr=iterr, coef_idx=j, coef=B_star[j], g=grad))
+                # end debugging ==
+
+            iterr += 1
+
+            if np.all((B_s - B_star)**2 < tol):
                 break
+        if iterr == max_iter: break
         coeffiecients[i, :] = B_star
     if return_path:
         return [B_star, l_path, np.transpose(coeffiecients)]
@@ -56,20 +68,21 @@ def lasso_path_one_step_two_lmda():
 
 def lasso_path_two_step_two_lmda():
     X, y, lmda_max, lmda_min, eps = generate_data()
-    B_star, l_path, coeff = lasso(X, y, lmda_min,
+    alphas = np.geomspace(lmda_max, lmda_min, 5)
+    B_star, l_path, coeff = lasso(X, y, lmda_min, alphas=alphas,
                                   max_iter=2, path_length=2, return_path=True)
     return coeff
 
-def lasso_path_one_step_five_lmda():
+def lasso_path_five_lmda():
     X, y, lmda_max, lmda_min, eps = generate_data()
     B_star, l_path, coeff = lasso(X, y, lmda_min,
-                                  max_iter=1, path_length=5, return_path=True)
+                                  max_iter=10000, path_length=5, return_path=True)
     return coeff
 
-def lasso_path_ten_step_ten_lmda():
+def lasso_path_ten_lmda():
     X, y, lmda_max, lmda_min, eps = generate_data()
     B_star, l_path, coeff = lasso(X, y, lmda_min,
-                                  max_iter=10, path_length=10, return_path=True)
+                                  max_iter=10000, path_length=10, return_path=True)
     return coeff
 
 def lasso_path_random_one_step_two_lmda():
@@ -78,19 +91,13 @@ def lasso_path_random_one_step_two_lmda():
                                   max_iter=1, path_length=2, return_path=True)
     return coeff
 
-def lasso_path_random_ten_step_five_lmda():
+def lasso_path_random_five_lmda():
     X, y, lmda_max, lmda_min, eps = generate_data(False)
-    l_path = np.geomspace(lmda_max, lmda_min, 5)
-    model = Lasso(fit_intercept=False, normalize=False,
-                  max_iter=10, tol=1e-7,
-                  warm_start=True)
-    alphas, coefs, _ = model.path(X, y, l1_ratio=1, eps=eps, n_alphas=5,
-                                  coef_init=np.zeros(X.shape[1]))
-    print(alphas)
-    return coefs
+    _, _, coeff = lasso(X, y, lmda_min, max_iter=10000, path_length=5, return_path=True)
+    return coeff
 
 if __name__ == '__main__':
-    np.set_printoptions(precision=16)
-    coeff = lasso_path_random_ten_step_five_lmda()
+    np.set_printoptions(precision=18)
+    coeff = lasso_path_random_five_lmda()
     print('\n')
     print(coeff)

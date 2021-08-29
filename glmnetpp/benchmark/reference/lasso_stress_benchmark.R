@@ -1,7 +1,7 @@
 library(glmnet)
 
-n <- 5000
-ps <- c(10, 50, 100, 500, 1000, 2000)
+n <- 100
+ps <- 20000#c(10, 50, 100, 500, 1000, 2000)
 
 for (p in ps)  
 {
@@ -12,8 +12,9 @@ for (p in ps)
     y <- as.numeric(scale(y)) * sqrt(n/(n-1))
 
     ptm <- proc.time()
-    glmnet.out <- glmnet(X, y, family='gaussian', alpha=1, standardize=F,
+    glmnet.out <- glmnet(X, y, family='gaussian', alpha=1, standardize=F, nlambda=6,
                          intercept=F, standardize.response=F, type.gaussian='covariance')
     diff <- proc.time() - ptm
     print(diff)
+    print(head(glmnet.out$lambda))
 }
