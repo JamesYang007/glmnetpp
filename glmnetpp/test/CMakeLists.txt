@@ -4,6 +4,8 @@
 
 add_executable(utility_unittest
     ${CMAKE_CURRENT_SOURCE_DIR}/util/eigen_ext_unittest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/util/compressed_matrix_unittest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/util/math_unittest.cpp
     )
 
 if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
