@@ -8,7 +8,6 @@
 #include <glmnetpp_bits/util/typedefs.hpp>
 
 namespace glmnetpp {
-namespace core {
 
 struct ElasticNetConfig
 {
@@ -20,11 +19,11 @@ struct ElasticNetConfig
     std::optional<Eigen::VectorXd> lambda;
 
     template <class XtyDerived>
-    inline void setup(const Eigen::MatrixBase<XtyDerived>& Xty,
+    inline void setup(const Eigen::MatrixBase<XtyDerived>& init_grad,
                       uint32_t nobs)
     {
         auto n = nobs;
-        auto p = Xty.size();
+        auto p = init_grad.size();
 
         // setup uninitialized values
         lambda_min_ratio = (n < p) ? 0.01 : 1e-4;
@@ -36,7 +35,7 @@ struct ElasticNetConfig
 
             Eigen::VectorXd lambda_vec(nlambda);
 
-            double lambda_max = Xty.array().abs().maxCoeff() / n;
+            double lambda_max = init_grad.array().abs().maxCoeff();
             double lambda_min = lambda_min_ratio * lambda_max;
             util::geomspace(lambda_vec, lambda_max, lambda_min, nlambda);
 
@@ -46,5 +45,4 @@ struct ElasticNetConfig
 
 };
 
-} // namespace core
 } // namespace glmentpp

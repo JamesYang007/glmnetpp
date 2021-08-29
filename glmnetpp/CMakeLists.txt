@@ -9,7 +9,7 @@ option(GLMNETPP_ENABLE_BENCHMARK    "Enable benchmarks to be built."    OFF)
 option(GLMNETPP_ENABLE_COVERAGE     "Build glmnetpp with coverage"      OFF)
 
 # Dependency on Eigen
-find_package(Eigen3 3.3 CONFIG REQUIRED NO_MODULE)
+find_package(Eigen3 3.4 CONFIG REQUIRED NO_MODULE)
 message(STATUS "Eigen3 found at ${EIGEN3_INCLUDE_DIR}")
 
 # Set include dirs

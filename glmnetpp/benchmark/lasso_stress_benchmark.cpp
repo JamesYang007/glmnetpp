@@ -9,7 +9,7 @@ struct lasso_stress_fixture : benchmark::Fixture
 {
     Eigen::MatrixXd X;
     Eigen::VectorXd y;
-    core::ElasticNetConfig config;
+    ElasticNetConfig config;
 };
 
 BENCHMARK_DEFINE_F(lasso_stress_fixture,
@@ -24,8 +24,11 @@ BENCHMARK_DEFINE_F(lasso_stress_fixture,
     X = center_scale(X);
     y = center_scale(y);
 
+    config.nlambda = 6;
+    auto model = Lasso(config);
+
     for (auto _ : state) {
-        auto out = lasso_path(X, y, config);
+        auto out = model.lasso_path(X, y);
     }
 }
 
