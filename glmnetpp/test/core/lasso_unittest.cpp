@@ -27,6 +27,11 @@ protected:
         config.max_iter = max_iter;
         config.nlambda = nlambda;
         lasso_ptr.reset(new Lasso(config));
+        auto& int_param = lasso_ptr->get_internal();
+
+        // make thresholds more stringent to test accuracy
+        int_param.delta_r_sq_prop_thresh_ = 0;  
+        int_param.max_r_sq_ = 1;
     }
 
     void initialize_data(init_type type)

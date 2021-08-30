@@ -57,7 +57,6 @@ public:
 	}
 
 	auto rows() const { return n_rows_; }
-	auto cols() const { return n_cols_; }
 
 private:
 	std::vector<std::unique_ptr<value_type>> buffer_pool_; // each element is a pointer to a buffer
@@ -105,14 +104,19 @@ public:
 		, col_to_ptr_(n_cols, nullptr)
 	{}
 
-	std::pair<Eigen::Map<vec_t>, bool> col(index_type c)
+	value_type* allocate(index_type c)
 	{
-		bool is_set = col_to_ptr_[c] != nullptr;
-		if (!is_set) {
-			col_to_ptr_[c] = alloc_.allocate();
-		}
-		return { Eigen::Map<vec_t>(col_to_ptr_[c], alloc_.rows()), is_set };
+		auto ptr = col_to_ptr_[c];
+		if (ptr) return ptr;
+		return (col_to_ptr_[c] = alloc_.allocate());
 	}
+
+	Eigen::Map<vec_t> col(index_type c) const
+	{
+		return Eigen::Map<vec_t>(col_to_ptr_[c], alloc_.rows());
+	}
+
+	bool is_set(index_type c) const { return col_to_ptr_[c] != nullptr; }
 	
 private:
 	alloc_t alloc_;

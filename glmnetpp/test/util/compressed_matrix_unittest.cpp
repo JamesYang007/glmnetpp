@@ -39,18 +39,20 @@ TEST_P(compressed_matrix_fixture, matrix_one_buffer_amount)
 
 	// allocate amount
 	for (size_t i = 0; i < alloc_amt; ++i) {
-		matrix_ptr->col(i);
+		matrix_ptr->allocate(i);
 	}
 
 	// all allocation pointers should be n_rows apart
-	auto [vec, was_stored_before] = matrix_ptr->col(0);
+	bool was_stored_before = matrix_ptr->is_set(0);
+	auto vec = matrix_ptr->col(0);
 	if (alloc_amt == 0) EXPECT_FALSE(was_stored_before);
 	else EXPECT_TRUE(was_stored_before);
 	auto prev_ptr = vec.data();
 	auto curr_ptr = prev_ptr;
 
 	for (size_t i = 1; i < alloc_amt; ++i) {
-		auto [vec, was_stored_before] = matrix_ptr->col(i);
+		bool was_stored_before = matrix_ptr->is_set(i);
+		auto vec = matrix_ptr->col(i);
 		EXPECT_TRUE(was_stored_before);
 		curr_ptr = vec.data();
 		EXPECT_EQ(curr_ptr - prev_ptr, n_rows);
@@ -68,18 +70,20 @@ TEST_P(compressed_matrix_fixture, matrix_two_buffer_amount)
 
 	// allocate amount
 	for (size_t i = 0; i < alloc_amt; ++i) {
-		matrix_ptr->col(i);
+		matrix_ptr->allocate(i);
 	}
 
 	// suffices to check starting from the second buffer 
-	auto [vec, was_stored_before] = matrix_ptr->col(cap);
+	bool was_stored_before = matrix_ptr->is_set(cap);
+	auto vec = matrix_ptr->col(cap);
 	if (alloc_amt == 0) EXPECT_FALSE(was_stored_before);
 	else EXPECT_TRUE(was_stored_before);
 	auto prev_ptr = vec.data();
 	auto curr_ptr = prev_ptr;
 
 	for (size_t i = cap+1; i < alloc_amt; ++i) {
-		auto [vec, was_stored_before] = matrix_ptr->col(i);
+		bool was_stored_before = matrix_ptr->is_set(i);
+		auto vec = matrix_ptr->col(i);
 		EXPECT_TRUE(was_stored_before);
 		curr_ptr = vec.data();
 		EXPECT_EQ(curr_ptr - prev_ptr, n_rows);

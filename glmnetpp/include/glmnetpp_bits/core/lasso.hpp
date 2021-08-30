@@ -4,38 +4,31 @@
 #include <glmnetpp_bits/core/elastic_net_output.hpp>
 #include <glmnetpp_bits/util/compressed_matrix.hpp>
 #include <glmnetpp_bits/util/math.hpp>
+#include <glmnetpp_bits/util/iterator/counting_iterator.hpp>
+#include <algorithm>
 #include <unordered_set>
 #include <cmath>
 
-#include <iostream>
-
 namespace glmnetpp {
-namespace details {
 
 /*
- * Checks the KKT condition for optimizing lasso at b_j.
+ * Linear model trained with L1 prior as regularizer.
  * Optimization function:
  *
  * 1/2 ||y - Xb||^2 + lmda * ||b||_1
+ * 
+ * Currently, the model assumes that y (n-vector) and X (n-by-p matrix) 
+ * are centered and scaled such that ||y|| = ||x_j|| = 1 for all j = 1,...,p
+ * and x_j are column vectors of X.
  *
- * KKT condition violated if and only if (|x_j^T (y-Xb)| > lambda)
- *
- * @param   grad_j      jth partial of negative loss: x_j^T (y-Xb)
- * @param   lambda      lmda in the above formula
- *
- * @return  true if KKT condition is not violated.
+ * Notes: 
+ * - glmnet computes R^2 differently (seems to be incorrect).
  */
-template <class T>
-inline bool check_kkt_lasso(T grad_j, T lambda)
+class Lasso
 {
-    auto abs_grad_j = std::abs(grad_j);
-    return abs_grad_j <= lambda;
-}
+    struct ElasticNetInternal;
 
-} // namespace details
-
-struct Lasso
-{
+public:
     Lasso(const ElasticNetConfig& config = ElasticNetConfig())
         : config_{ config }
     {}
@@ -45,179 +38,174 @@ struct Lasso
     lasso_path(const Eigen::MatrixBase<XDerived>& X,
                const Eigen::MatrixBase<YDerived>& y);
 
+    ElasticNetInternal& get_internal() { return internal_; }
+    ElasticNetInternal get_internal() const { return internal_; }
+
 private:
     using index_t = typename Eigen::Index;
 
+    // Internal parameters
+    struct ElasticNetInternal
+    {
+        double delta_r_sq_prop_thresh_ = 1e-5;
+        double max_r_sq_ = 0.999;
+    };
+
+    // Flags to indicate state of lasso.
     enum class lasso_state_
     {
         noop_,
-        converged_,
-        max_iter_reached_
+        max_iter_reached_,
+        max_inv_active_set_size_reached_,
+        beta_no_change_
     };
 
-    bool thresh_reached_(double v) const { return v * v < config_.thresh; }
+	/*
+	 * Checks the KKT condition for optimizing lasso at b_j.
+	 *
+	 * KKT condition violated if and only if (|x_j^T (y-Xb)| > lambda)
+	 *
+	 * @param   grad_j      jth partial of negative loss: x_j^T (y-Xb)
+	 * @param   lambda      lmda in the above formula
+	 *
+	 * @return  true if KKT condition is not violated.
+	 */
+	template <class T>
+	static inline bool check_kkt_lasso(T grad_j, T lambda)
+	{
+		auto abs_grad_j = std::abs(grad_j);
+		return abs_grad_j <= lambda;
+	}
 
-	template <class IncludeSubsetType
+    /*
+     * Computes whether convergence threshold is reached.
+     * 
+     * @param   v       maximum absolute difference of the coordinates 
+     *                  between previous beta and current beta.
+     * @return  true if threshold reached.
+     */ 
+    bool convg_thresh_reached_(double v) const { return v * v < config_.thresh; }
+
+    /*
+     * Checks KKT for elements from isub_begin to isub_end(non - inclusive).
+     * It does not check for indices j where esub_f(j) evaluates to true.
+     * If KKT is violated, f(j) is invoked.
+     *
+     * @param   isub_begin      begin iterator of inclusive subset of indices to check KKT.
+     * @param   isub_end        end iterator of inclusive subset.
+     * @param   esub_f          exclusive subset predicate.
+     * @param   grad            current gradient.
+     * @param   lambda          regularization parameter.
+     * @param   f               violation action.
+     *
+     * @return  true if all indices whose KKT are checked pass.
+     */ 
+	template <class IncludeSubsetIterType
 			, class ExcludeActionType
 			, class GradVecType
 			, class ActionType>
-	inline bool check_kkt_(const IncludeSubsetType& isub,
-                           const ExcludeActionType& esub_f,
-                           const GradVecType& grad,
-                           double lambda,
-                           ActionType f) const;
+	static inline bool check_kkt_(IncludeSubsetIterType isub_begin,
+								  IncludeSubsetIterType isub_end,
+								  ExcludeActionType esub_f,
+								  const GradVecType& grad,
+								  double lambda,
+								  ActionType f);
 
-	template <class ExcludeActionType
-			, class GradVecType
-			, class ActionType>
-	inline bool check_kkt_(index_t p,
-                           const ExcludeActionType& esub_f,
-						   const GradVecType& grad,
-						   double lambda,
-						   ActionType f) const;
+    /*
+     * Updates beta via coordinate descent rule.
+     */
+    template <class ValueType>
+    static inline void update_beta_(ValueType& beta,
+								    ValueType grad,
+								    ValueType lambda)
+    {
+		// TODO: loo_grad should be computed using + ||x_j||^2 beta[j]
+		auto loo_grad = grad + beta;
+		beta = util::soft_threshold(loo_grad, lambda);
+    }
 
-	// at a given lambda, first iteration: go through all predictors,
-	// and update beta, X_cov, active_set/inv_active_set, and grad.
-	template <class BetaVecType
-			, class GradVecType
-			, class XType
-			, class XCovType
-			, class ActiveSetType
-			, class InvActiveSetType
-			, class InvStrongSetType>
-	inline lasso_state_ update_approx_active_set_(
-		index_t n,
-		const BetaVecType& old_beta,
-		BetaVecType& new_beta,
-		GradVecType& grad,
-		XType& X,
-		XCovType& X_cov,
-		ActiveSetType& active_set,
-		InvActiveSetType& inv_active_set,
-		const InvStrongSetType& inv_strong_set,
-		double lambda);
+    /*
+     * Updates X_cov, if necessary.
+     */
+    template <class XCovType, class XType>
+    static inline void update_x_cov_(index_t idx,
+                                     XCovType& X_cov,
+                                     const XType& X)
+    {
+		if (!X_cov.is_set(idx)) {
+			X_cov.allocate(idx);
+			X_cov.col(idx) = X.transpose() * X.col(idx);
+		}
+    }
+
+    /*
+     * Updates gradient using an inner product vector of the form X^Tx_j
+     * and beta_diff = (beta_old - beta_new) / n, where n is the number of data points.
+     */
+    template <class GradType, class XInnerProdType, class ValueType>
+    static inline void update_grad_(GradType&& grad,
+                                    XInnerProdType&& x_inner_prod,
+                                    ValueType beta_diff)
+    {
+	    // TODO: n should actually go away and be absorbed into x_inner_prod.
+        grad += x_inner_prod * beta_diff;
+    }
+
+    /*
+     * Updates r_sq (R^2) using a gradient value at index j
+     * and beta_diff = beta_old_j - beta_new_j.
+     */
+    template <class ValueType>
+    static inline void update_r_sq_(ValueType& r_sq,
+                                    ValueType grad,
+                                    ValueType beta_diff)
+    {
+		// TODO: should be -beta_diff * ||x_j||^2 at the end
+        r_sq -= beta_diff * (2.0 * grad - beta_diff);
+    }
+
+    /*
+     * Updates maximum absolute beta difference.
+     */
+    template <class ValueType>
+    static inline void update_max_abs_diff_(ValueType& max_abs_diff,
+                                            ValueType beta_diff)
+    {
+		max_abs_diff = std::max(max_abs_diff, std::abs(beta_diff));
+    }
 
     ElasticNetConfig config_;
+    ElasticNetInternal internal_;
     ElasticNetOutput output_;
-    lasso_state_ curr_state_;
+    lasso_state_ curr_state_ = lasso_state_::noop_;
 };
 
-template <class IncludeSubsetType
+template <class IncludeSubsetIterType
 		, class ExcludeActionType
         , class GradVecType
 		, class ActionType>
-inline bool Lasso::check_kkt_(const IncludeSubsetType& isub,
-                              const ExcludeActionType& esub_f,
-                              const GradVecType& grad,
-                              double lambda,
-                              ActionType f) const
+inline bool Lasso::check_kkt_(IncludeSubsetIterType isub_begin,
+							  IncludeSubsetIterType isub_end,
+							  ExcludeActionType esub_f,
+							  const GradVecType& grad,
+							  double lambda,
+							  ActionType f) 
 {
-	// flag indicating whether kkt is met for all isub members
 	bool all_kkt_met = true;
 
-	for (auto j : isub) {
-        // continue if exclude
-        if (esub_f(j)) continue;
-        // TODO: check_kkt_lasso should probably change later to a lambda parameter
-		bool kkt_met = details::check_kkt_lasso(grad[j], lambda); 
-		if (!kkt_met) {
-			all_kkt_met = false;
-            f(j);
-		}
-	}
+    std::for_each(isub_begin, isub_end,
+        [=, &grad, &all_kkt_met](auto j) {
+            if (esub_f(j)) return;
+            // TODO: check_kkt_lasso should probably change later to a lambda parameter
+            bool kkt_met = check_kkt_lasso(grad[j], lambda);
+            if (!kkt_met) {
+                all_kkt_met = false;
+                f(j);
+            }
+        });
 
     return all_kkt_met;
 }
-
-template <class ExcludeActionType
-		, class GradVecType
-		, class ActionType>
-inline bool Lasso::check_kkt_(index_t p,
-                              const ExcludeActionType& esub_f,
-                              const GradVecType& grad,
-                              double lambda,
-                              ActionType f) const
-{
-	// flag indicating whether kkt is met for all isub members
-	bool all_kkt_met = true;
-
-    for (index_t j = 0; j < p; ++j) {
-        // continue if exclude
-        if (esub_f(j)) continue;
-		auto grad_j = grad[j];
-        // TODO: check_kkt_lasso should probably change later to a lambda parameter
-		bool kkt_met = details::check_kkt_lasso(grad_j, lambda); 
-		if (!kkt_met) {
-			all_kkt_met = false;
-            f(j);
-		}
-	}
-
-    return all_kkt_met;
-}
-
-template <class BetaVecType
-        , class GradVecType
-        , class XType
-        , class XCovType
-        , class ActiveSetType
-        , class InvActiveSetType
-        , class InvStrongSetType>
-inline Lasso::lasso_state_ Lasso::update_approx_active_set_(
-    index_t n,
-	const BetaVecType& old_beta,
-    BetaVecType& new_beta,
-    GradVecType& grad,
-    XType& X,
-    XCovType& X_cov,
-    ActiveSetType& active_set,
-    InvActiveSetType& inv_active_set,
-    const InvStrongSetType& inv_strong_set,
-    double lambda)
-{
-    double max_abs_diff = 0.;
-
-	for (auto j : inv_strong_set) {
-
-        auto old_beta_j = old_beta[j];
-
-		// compute new beta_j
-		// TODO: loo_grad should be computed using + ||x_j||^2 beta[j]
-		auto loo_grad_j = grad[j] + old_beta_j;
-		new_beta[j] = util::soft_threshold(loo_grad_j, lambda);
-
-		// update gradient only if beta_j changed
-        if (old_beta_j == new_beta[j]) continue;
-
-		// update X covariance matrix column j if not set before
-		auto [vec, was_set_before] = X_cov.col(j);
-		if (!was_set_before) vec = X.transpose()* X.col(j);
-
-        if (!active_set[j]) {
-            inv_active_set.push_back(j);
-            active_set[j] = true;
-        }
-
-		auto beta_diff = old_beta_j - new_beta[j];
-
-		// update gradient component
-		// TODO: after generalizing to arbitrary weights, 
-		// division by n should go away
-		grad += vec * (beta_diff / n);
-
-		// update max abs diff of betas
-		max_abs_diff = std::max(max_abs_diff, std::abs(beta_diff));
-
-	}
-
-	if (thresh_reached_(max_abs_diff)) {
-		// do some lambda checking...
-		return lasso_state_::converged_;
-	}
-
-    return lasso_state_::noop_;
-}
-
  
 /*
  * Computes the lasso path given X, y, and a configuration object.
@@ -229,13 +217,18 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
                   const Eigen::MatrixBase<YDerived>& y)
 {
     // TODO: 
-    // 1. lambda vector doesn't need to be a vector if default (generate as we go) (use std::variant?)
-    //      - also apply a similar early stopping method.
-    // 2. generalize to arbitrary weights
-    // 3. mark this is covariance method. 
+    // 1. generalize to arbitrary weights.
+    // 2. generalize policy that defines how to perform the coordinate descent at index j. 
+    // 3. add a check that active set never exceeds a user-specified number of predictors.
     using value_t = typename Eigen::MatrixBase<XDerived>::value_type;
     using vec_t = Eigen::Matrix<value_t, Eigen::Dynamic, 1>;
     using mat_t = Eigen::Matrix<value_t, Eigen::Dynamic, Eigen::Dynamic>;
+
+    // if max_iter is <= 0, yeet outta here
+    if (config_.max_iter <= 0) { 
+        curr_state_ = lasso_state_::max_iter_reached_;
+        return output_; 
+    }
 
     // convenience variables
     auto n = X.rows();
@@ -246,13 +239,6 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
     
     // setup rest of configuration
     config_.setup(grad, n);
-
-    // initialization
-    output_.beta.resize(p, config_.nlambda);
-    output_.beta.setZero();
-
-    // if max_iter is <= 0, yeet outta here
-    if (config_.max_iter <= 0) { return output_; }
     
     // active_set contains whether index j has ever been active 
     std::vector<bool> active_set(p, false);
@@ -280,11 +266,22 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
     vec_t compressed_beta(p);
 
 	size_t iter = 0;
+    value_t curr_lambda = config_.get_lambda(0, std::numeric_limits<value_t>::infinity());
+    value_t curr_r_sq = 0;
+
+    // initialize output
+    output_.beta.resize(p, config_.nlambda);
+    output_.beta.setZero();
+    output_.lambda.push_back(curr_lambda);
 
     // iterate over each lambda
-    for (int l = 1; l < config_.lambda->size(); ++l) {
-        
-        const value_t lambda = (*config_.lambda)[l];
+    for (int l = 1; l < config_.nlambda; ++l) {
+
+        value_t prev_lambda = curr_lambda;
+        curr_lambda = config_.get_lambda(l, curr_lambda);
+        value_t prev_r_sq = curr_r_sq;
+		auto curr_beta = output_.beta.col(l);
+		curr_beta = output_.beta.col(l-1);
 
         // compute the strong set indices using previous beta
         // |x_j^T (y - Xb(l-1))| < 2lmda_l - lmda_{l-1}
@@ -294,7 +291,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
         std::fill(strong_set.begin(), strong_set.end(), false);
         for (int j = 0; j < grad.size(); ++j) {
             auto abs_grad_j = std::abs(grad[j]);
-            if (abs_grad_j >= 2 * lambda - (*config_.lambda)[l-1]) {
+            if (abs_grad_j >= 2 * curr_lambda - prev_lambda) {
                 strong_set[j] = true;
                 inv_strong_set.push_back(j);
             }
@@ -306,8 +303,9 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
 			// First few iterations: the main goal is to get a good approximation of active_set at current lambda.
 			// Since strong_set only relies on the previous beta, assuming the previous beta converged,
 			// strong_set should have converged as well, i.e. 
-			// it is a very good approximation of the set of true new members to the active_set.
+			// it is a very good _approximated_ superset of the true new members to the active_set.
 			// Hence, it suffices to only iterate through strong_set.
+            // We will correct for any errors when we check KKT.
 			bool converged_all_kkt_met = false;
 			while (1) {
 				if (iter == config_.max_iter) {
@@ -315,12 +313,37 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
 					return output_;
 				}
 				++iter;
-                auto old_beta = output_.beta.col(l-1);
-                auto new_beta = output_.beta.col(l);
-				auto update_state = update_approx_active_set_(
-					n, old_beta, new_beta, 
-					grad, X, X_cov, 
-					active_set, inv_active_set, inv_strong_set, lambda);
+
+				value_t max_abs_diff = 0;
+                for (auto j : inv_strong_set) {
+
+					auto prev_beta_j = curr_beta[j];
+
+					update_beta_(curr_beta[j], grad[j], curr_lambda);
+
+                    if (prev_beta_j == curr_beta[j]) continue;
+					
+					update_x_cov_(j, X_cov, X);
+
+					auto vec = X_cov.col(j);
+					auto beta_diff = prev_beta_j - curr_beta[j];
+
+					// important to update gradient before updating curr_r_sq!
+					update_grad_(grad, vec, beta_diff / n);
+					update_r_sq_(curr_r_sq, grad[j], beta_diff);
+					update_max_abs_diff_(max_abs_diff, beta_diff);
+
+                    if (!active_set[j]) {
+                        if (inv_active_set.size() == config_.max_active) {
+                            curr_state_ = lasso_state_::max_inv_active_set_size_reached_;
+                            break;
+                        }
+                        inv_active_set.push_back(j);
+                        active_set[j] = true;
+                    }
+                }
+
+                if (curr_state_ == lasso_state_::max_inv_active_set_size_reached_) break;
 
 				// Slight optimization: if the one iteration converged,
 				// check KKT for the complement of strong_set.
@@ -328,12 +351,14 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
                 // Otherwise, add to strong_set; most likely it was violated
                 // because the strong_set hasn't converged fully yet,
                 // so we incorrectly labeled the violator as not being in strong_set.
-				if (update_state == lasso_state_::converged_) {
-					bool all_kkt_met = check_kkt_(p, 
+				if (convg_thresh_reached_(max_abs_diff)) {
+					bool all_kkt_met = check_kkt_(
+                        util::counting_iterator<index_t>(0),
+                        util::counting_iterator<index_t>(p),
 						[&](index_t j) {
 							return strong_set[j];
 						}, 
-						grad, lambda,
+						grad, curr_lambda,
 						[&](index_t j) {
 							if (!strong_set[j]) inv_strong_set.push_back(j);
 							strong_set[j] = true;
@@ -345,7 +370,8 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
 				}
 				else break;
 			}
-			if (converged_all_kkt_met) break;
+            if (curr_state_ == lasso_state_::max_inv_active_set_size_reached_ ||
+                converged_all_kkt_met) break;
 			
 			// initialize proposal set to current ever-active set
 			proposal_set = active_set;
@@ -359,7 +385,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
                 // TODO: can probably optimize by only copying betas
                 // that were newly added to inv_proposal_set.
                 compressed_beta(Eigen::seqN(0, inv_proposal_set.size())) =
-                    output_.beta(inv_proposal_set, l);
+                    curr_beta(inv_proposal_set);
 
                 // apply coordinate descents over proposal set
                 while (1) {
@@ -370,46 +396,34 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
                     }
                     ++iter;
 
-                    // compute threshold criterion for stopping early
-                    // max_j |sum_i w_i x_ij y_i|
-                    value_t max_abs_diff = 0;
-
                     // update beta for predictors in proposal set
+                    value_t max_abs_diff = 0;
                     for (auto j : inv_proposal_set) {
+						auto prev_beta_j = curr_beta[j];
 
-                        value_t old_beta_j = output_.beta(j, l);
+						update_beta_(curr_beta[j], grad[j], curr_lambda);
 
-                        // compute new beta_j
-                        // TODO: loo_grad should be computed using + ||x_j||^2 beta[j]
-                        auto loo_grad_j = grad[j] + old_beta_j;
-                        output_.beta(j, l) = util::soft_threshold(loo_grad_j, lambda);
+						if (prev_beta_j == curr_beta[j]) continue;
+						
+						update_x_cov_(j, X_cov, X);
 
-                        // update gradient only if beta_j changed
-                        if (old_beta_j == output_.beta(j, l)) continue;
+						auto vec = X_cov.col(j);
+						auto beta_diff = prev_beta_j - curr_beta[j];
 
-                        // have to check X_cov again and update since 
-                        // new variables from strong set could have been added.
-                        auto [vec, was_set_before] = X_cov.col(j);
-                        if (!was_set_before) vec = X.transpose() * X.col(j);
+						// important to update gradient before updating curr_r_sq!
+                        // important to only update on proposal set!
+						update_grad_(grad(inv_proposal_set), vec(inv_proposal_set), beta_diff / n);
+						update_r_sq_(curr_r_sq, grad[j], beta_diff);
+						update_max_abs_diff_(max_abs_diff, beta_diff);
+                    }
 
-                        // update gradient component
-                        // TODO: after generalizing to arbitrary weights, 
-                        // division by n should go away
-                        value_t beta_diff = old_beta_j - output_.beta(j, l);
-                        grad(inv_proposal_set) += vec(inv_proposal_set) * (beta_diff / n);
-
-                        // update max abs diff of betas
-                        max_abs_diff = std::max(max_abs_diff, std::abs(beta_diff));
-
-                    } // end for - beta update
-
-                    if (thresh_reached_(max_abs_diff)) break;
+                    if (convg_thresh_reached_(max_abs_diff)) break;
 
                 } // end for - coordinate descent
 
                 // update gradient on all other non-proposed components
                 compressed_beta(Eigen::seqN(0, inv_proposal_set.size())) -=
-                    output_.beta(inv_proposal_set, l);
+                    curr_beta(inv_proposal_set);
 
                 // TODO: maybe optimize if proposal_set is small enough,
                 // then just cache grad components for proposal and 
@@ -417,18 +431,20 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
                 for (int j = 0; j < p; ++j) {
                     if (proposal_set[j]) continue;
                     for (int k = 0; k < inv_proposal_set.size(); ++k) {
-                        if (compressed_beta[k] == 0.) continue;
-                        auto [vec, _] = X_cov.col(inv_proposal_set[k]);
-                        grad[j] += (compressed_beta(k) / n) * vec(j);
+                        if (compressed_beta[k] == 0) continue;
+                        auto vec = X_cov.col(inv_proposal_set[k]);
+                        update_grad_(grad[j], vec(j), compressed_beta(k) / n);
                     }
                 }
 
+                // Check KKT on strong set (ignoring proposal set).
                 bool strong_set_kkt_met = check_kkt_(
-                    inv_strong_set,
+                    inv_strong_set.begin(),
+                    inv_strong_set.end(),
                     [&](index_t j) {
                         return proposal_set[j];
                     },
-                    grad, lambda,
+                    grad, curr_lambda,
                     [&](index_t j) {
                         if (!proposal_set[j]) inv_proposal_set.push_back(j);
                         proposal_set[j] = true;
@@ -438,12 +454,14 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
 
             } // end for - kkt on strong set met
 
-            // check KKT condition on all predictors.
-            bool all_kkt_met = check_kkt_(p,
+            // Check KKT condition on all predictors (ignoring proposal_set and strong_set).
+            bool all_kkt_met = check_kkt_(
+                util::counting_iterator<index_t>(0),
+                util::counting_iterator<index_t>(p),
                 [&](index_t j) {
                     return proposal_set[j] || strong_set[j];
                 },
-                grad, lambda,
+                grad, curr_lambda,
 				[&](index_t j) {
                     if (!strong_set[j]) inv_strong_set.push_back(j);
                     strong_set[j] = true;
@@ -452,6 +470,25 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
             if (all_kkt_met) break;
 
         } // end while - all kkt met
+
+        // no need to compute for further lambdas
+        if (curr_state_ == lasso_state_::max_inv_active_set_size_reached_) break;
+
+        output_.lambda.push_back(curr_lambda);
+
+        // Count number of current non-zero coefficients.
+        // By definition, suffices to look in active set.
+        // In general, must look at the full active set,
+        // since coefficients that were non-zero before could now be zero.
+        size_t non_zero_count = 0;
+        for (auto j : inv_active_set) {
+            if (curr_beta(j) != 0) ++non_zero_count;
+        }
+
+        if ((non_zero_count > config_.max_non_zero)
+            || (curr_r_sq - prev_r_sq < 
+                   internal_.delta_r_sq_prop_thresh_ * curr_r_sq)
+            || (curr_r_sq > internal_.max_r_sq_)) break;
 
     } // end for - iterate through lambda
 
