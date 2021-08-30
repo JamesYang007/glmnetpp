@@ -52,7 +52,7 @@ struct ElasticNetConfig
         }
     }
 
-    double get_lambda(size_t l, double curr_lambda) const
+    double get_lambda(util::index_t l, double curr_lambda) const
     {
         static_cast<void>(curr_lambda);
         if (lambda) { return lambda.value()[l]; }

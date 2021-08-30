@@ -31,7 +31,7 @@ inline constexpr IntType ilog2(IntType x)
 // Computes the soft-threshold function:
 // sign(z) * max(|z| - l, 0)
 template <class T>
-T soft_threshold(T z, T l)
+inline constexpr T soft_threshold(T z, T l)
 {
 	auto abs_z = std::abs(z);
 	if (l >= abs_z) return 0.;

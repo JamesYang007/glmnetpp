@@ -44,7 +44,7 @@ protected:
 			std::make_pair<int>( 329, 8 ),\
 			std::make_pair<int>( 511, 8 ),\
 			std::make_pair<int>( 512, 9 )\
-		));
+		))
 
 ILOG2_TEST_SUITE_GEN(int, int);
 ILOG2_TEST_SUITE_GEN(uint, unsigned int);

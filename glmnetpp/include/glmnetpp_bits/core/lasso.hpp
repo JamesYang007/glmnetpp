@@ -42,7 +42,7 @@ public:
     ElasticNetInternal get_internal() const { return internal_; }
 
 private:
-    using index_t = typename Eigen::Index;
+    using index_t = util::index_t;
 
     // Internal parameters
     struct ElasticNetInternal
@@ -222,7 +222,6 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
     // 3. add a check that active set never exceeds a user-specified number of predictors.
     using value_t = typename Eigen::MatrixBase<XDerived>::value_type;
     using vec_t = Eigen::Matrix<value_t, Eigen::Dynamic, 1>;
-    using mat_t = Eigen::Matrix<value_t, Eigen::Dynamic, Eigen::Dynamic>;
 
     // if max_iter is <= 0, yeet outta here
     if (config_.max_iter <= 0) { 
@@ -265,7 +264,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
     // if there are k proposed beta, the first k components will be the compressed version.
     vec_t compressed_beta(p);
 
-	size_t iter = 0;
+	index_t iter = 0;
     value_t curr_lambda = config_.get_lambda(0, std::numeric_limits<value_t>::infinity());
     value_t curr_r_sq = 0;
 
@@ -275,7 +274,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
     output_.lambda.push_back(curr_lambda);
 
     // iterate over each lambda
-    for (int l = 1; l < config_.nlambda; ++l) {
+    for (index_t l = 1; l < config_.nlambda; ++l) {
 
         value_t prev_lambda = curr_lambda;
         curr_lambda = config_.get_lambda(l, curr_lambda);
@@ -289,7 +288,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
         // TODO: in general, elastic net gradient should take into account the l2 regularization
         inv_strong_set.clear();
         std::fill(strong_set.begin(), strong_set.end(), false);
-        for (int j = 0; j < grad.size(); ++j) {
+        for (index_t j = 0; j < grad.size(); ++j) {
             auto abs_grad_j = std::abs(grad[j]);
             if (abs_grad_j >= 2 * curr_lambda - prev_lambda) {
                 strong_set[j] = true;
@@ -334,7 +333,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
 					update_max_abs_diff_(max_abs_diff, beta_diff);
 
                     if (!active_set[j]) {
-                        if (inv_active_set.size() == config_.max_active) {
+                        if (inv_active_set.size() == static_cast<size_t>(config_.max_active)) {
                             curr_state_ = lasso_state_::max_inv_active_set_size_reached_;
                             break;
                         }
@@ -428,9 +427,9 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
                 // TODO: maybe optimize if proposal_set is small enough,
                 // then just cache grad components for proposal and 
                 // update grad entirely (vectorization), then replace at proposal.
-                for (int j = 0; j < p; ++j) {
+                for (index_t j = 0; j < p; ++j) {
                     if (proposal_set[j]) continue;
-                    for (int k = 0; k < inv_proposal_set.size(); ++k) {
+                    for (index_t k = 0; static_cast<size_t>(k) < inv_proposal_set.size(); ++k) {
                         if (compressed_beta[k] == 0) continue;
                         auto vec = X_cov.col(inv_proposal_set[k]);
                         update_grad_(grad[j], vec(j), compressed_beta(k) / n);
@@ -480,7 +479,7 @@ Lasso::lasso_path(const Eigen::MatrixBase<XDerived>& X,
         // By definition, suffices to look in active set.
         // In general, must look at the full active set,
         // since coefficients that were non-zero before could now be zero.
-        size_t non_zero_count = 0;
+        index_t non_zero_count = 0;
         for (auto j : inv_active_set) {
             if (curr_beta(j) != 0) ++non_zero_count;
         }

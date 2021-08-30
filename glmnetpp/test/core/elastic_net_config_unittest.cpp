@@ -81,7 +81,7 @@ TEST_F(elastic_net_config_fixture,
     config.lambda = expected;
     config.setup(init_grad, nobs_large);
 
-    for (int i = 0; i < expected.size(); ++i) {
+    for (size_t i = 0; i < expected.size(); ++i) {
         auto lmda = config.get_lambda(i, 0);
         EXPECT_DOUBLE_EQ(lmda, expected[i]);
     }

@@ -16,5 +16,4 @@ for (p in ps)
                          intercept=F, standardize.response=F, type.gaussian='covariance')
     diff <- proc.time() - ptm
     print(diff)
-    print(head(glmnet.out$lambda))
 }

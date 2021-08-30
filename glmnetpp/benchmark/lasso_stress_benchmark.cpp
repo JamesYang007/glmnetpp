@@ -2,6 +2,7 @@
 #include <Eigen/Core>
 #include <glmnetpp_bits/core/lasso.hpp>
 #include <testutil/data_util.hpp>
+#include <ctime>
 
 namespace glmnetpp {
 
@@ -15,6 +16,7 @@ struct lasso_stress_fixture : benchmark::Fixture
 BENCHMARK_DEFINE_F(lasso_stress_fixture,
                    lasso_large_X_y_vary_p)(benchmark::State& state)
 {
+    std::srand(std::time(0));
     util::index_t n = 100;
     util::index_t p = state.range(0);
     X.resize(n, p);
@@ -25,9 +27,9 @@ BENCHMARK_DEFINE_F(lasso_stress_fixture,
     y = center_scale(y);
 
     config.nlambda = 6;
-    auto model = Lasso(config);
 
     for (auto _ : state) {
+        auto model = Lasso(config);
         auto out = model.lasso_path(X, y);
     }
 }
