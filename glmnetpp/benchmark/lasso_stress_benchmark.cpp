@@ -36,12 +36,12 @@ BENCHMARK_DEFINE_F(lasso_stress_fixture,
 
 BENCHMARK_REGISTER_F(lasso_stress_fixture,
                      lasso_large_X_y_vary_p)
- //->Arg(10)
- //->Arg(50)
- //->Arg(100)
- //->Arg(500)
- //->Arg(1000)
- //->Arg(2000)
+ ->Arg(10)
+ ->Arg(50)
+ ->Arg(100)
+ ->Arg(500)
+ ->Arg(1000)
+ ->Arg(2000)
  ->Arg(20000)
     ;
 
