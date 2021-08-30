@@ -4,6 +4,8 @@
 #include <string>
 #include <Eigen/Dense>
 
+namespace glmnetpp {
+
 Eigen::MatrixXd read_csv(const std::string& filename)
 {
     std::vector<double> matrixEntries;
@@ -44,3 +46,5 @@ center_scale(const Eigen::Matrix<T, R, C>& X)
     }
     return out;
 }
+
+} // namespace glmnetpp

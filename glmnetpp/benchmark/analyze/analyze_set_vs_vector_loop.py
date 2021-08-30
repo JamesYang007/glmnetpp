@@ -21,7 +21,7 @@ def plot(df, fig_dir):
     plt.savefig(os.path.join(fig_dir, TESTNAME + '_fig.png'))
 
 # Run benchmark for set_vs_vector_loop
-def run(bench_dir, data_dir):
+def run(bench_dir, data_dir, ref_dir='', data_scr_dir=''):
     df = pd.DataFrame()
 
     # save current working directory

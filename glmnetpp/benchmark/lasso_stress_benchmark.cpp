@@ -3,6 +3,7 @@
 #include <glmnetpp_bits/core/lasso.hpp>
 #include <testutil/data_util.hpp>
 #include <ctime>
+#include <string>
 
 namespace glmnetpp {
 
@@ -14,19 +15,21 @@ struct lasso_stress_fixture : benchmark::Fixture
 };
 
 BENCHMARK_DEFINE_F(lasso_stress_fixture,
-                   lasso_large_X_y_vary_p)(benchmark::State& state)
+                   lasso_unif_X_y)(benchmark::State& state)
 {
-    std::srand(std::time(0));
-    util::index_t n = 100;
-    util::index_t p = state.range(0);
-    X.resize(n, p);
-    y.resize(n);
-    X.setRandom();
-    y.setRandom();
+    util::index_t n = state.range(0);
+    util::index_t p = state.range(1);
+
+    std::string prefix = "../../../benchmark/data/";
+    X = read_csv(prefix + "x_unif_" + std::to_string(n) + 
+                 "_" + std::to_string(p) + ".csv");
+    y = read_csv(prefix + "y_unif_" + std::to_string(n) +
+                 "_" + std::to_string(p) + ".csv");
     X = center_scale(X);
     y = center_scale(y);
 
-    config.nlambda = 6;
+    state.counters["n"] = n;
+    state.counters["p"] = p;
 
     for (auto _ : state) {
         auto model = Lasso(config);
@@ -35,14 +38,11 @@ BENCHMARK_DEFINE_F(lasso_stress_fixture,
 }
 
 BENCHMARK_REGISTER_F(lasso_stress_fixture,
-                     lasso_large_X_y_vary_p)
- ->Arg(10)
- ->Arg(50)
- ->Arg(100)
- ->Arg(500)
- ->Arg(1000)
- ->Arg(2000)
- ->Arg(20000)
+                     lasso_unif_X_y)
+    ->ArgsProduct({
+        {100, 500, 1000, 2000},
+        benchmark::CreateRange(2, 1<<14, 2)
+        })
     ;
 
 } // namespace glmnetpp

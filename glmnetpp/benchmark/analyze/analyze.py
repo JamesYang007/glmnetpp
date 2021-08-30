@@ -3,8 +3,9 @@
 
 import argparse
 import matplotlib.pyplot as plt
-
+import path_names
 import analyze_set_vs_vector_loop as asvvl
+import analyze_lasso_stress_benchmark as alsb
 
 parser = argparse.ArgumentParser(description='Collects data and produces plots of benchmark programs.')
 parser.add_argument('bench_names', nargs='*',
@@ -17,19 +18,16 @@ if len(args.bench_names) == 0 and not args.a:
     raise RuntimeError(
         'At least one benchmark name must be specified if -a is not specified.')
 
-# Path definitions
-figpath = '../../docs/figs'
-benchpath = '../../build/release/benchmark'
-datapath = '../../docs/data'
-
-# Make plot font size bigger
-plt.rcParams["font.size"] = "12"
-
 # Dictionary of bench name to module name
 bench_to_module = {
-    asvvl.TESTNAME : asvvl
+    asvvl.TESTNAME : asvvl,
+    alsb.TESTNAME : alsb
 }
 
 mods = [bench_to_module[bench_name] for bench_name in args.bench_names]
 for mod in mods:
-    mod.plot(mod.run(benchpath, datapath), figpath)
+    mod.plot(mod.run(path_names.bench_dir,
+                     path_names.data_dir,
+                     path_names.ref_dir,
+                     path_names.data_scr_path),
+             path_names.fig_path)
