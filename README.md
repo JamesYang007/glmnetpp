@@ -27,7 +27,7 @@ using `glmnet++` and `glmnet`.
 
 The data was pre-generated and both packages used the same data.
 All data was standardized before performing lasso.
-Since `glmnet++` currenotly only implements the covariance method [[1]](#1),
+Since `glmnet++` currently only implements the covariance method [[1]](#1),
 we fix this method for `glmnet` as well.
 
 The following is a collection of benchmarks for 
