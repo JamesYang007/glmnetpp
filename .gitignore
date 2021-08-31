@@ -2,4 +2,4 @@
 *__pycache__*
 *.vs/
 *CMakeSettings.json
-*benchmark/data/
+*/benchmark/data/
