@@ -25,7 +25,7 @@ for (j in 1:length(ns))
         y <- as.numeric(scale(y)) * sqrt(n/(n-1))
 
         out <- microbenchmark(
-            glmnet(X, y, family='gaussian', alpha=1, standardize=F,
+            glmnet(X, y, family='gaussian',
                    intercept=F, standardize.response=F, type.gaussian='covariance'),
             unit='ns', times=iters[i])
         avg.times[curr_row, 1] <- mean(out$time)
