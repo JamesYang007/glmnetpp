@@ -81,10 +81,6 @@ struct UpdateResourceGaussianBase
 
     auto grad(index_t j) const { return grad_[j]; }
 
-    template <class BetaType>
-    auto beta_proposal(BetaType&& beta) const
-    { return beta(inv_proposal_set_); }
-
     void update_active_set(index_t j)
     {
         inv_active_set_.push_back(j);
@@ -206,8 +202,10 @@ public:
 
         // important to update gradient before updating curr_r_sq!
         // TODO: n should actually go away and be absorbed into vec.
-        this->grad_(this->inv_proposal_set_) += 
-            vec(this->inv_proposal_set_) * (beta_diff / X.rows());
+        auto beta_diff_scaled = (beta_diff / X.rows());
+        for (auto j : this->inv_proposal_set_) {
+            this->grad_[j] += vec[j] * beta_diff_scaled;
+        }
     }
 
     void update_invariant_compressed(

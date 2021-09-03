@@ -180,8 +180,14 @@ public:
         const XType& X)
     {
         // save old proposed beta
-        compressed_beta_(Eigen::seqN(0, rsrc_.n_proposal())) =
-            rsrc_.beta_proposal(beta);
+        index_t k = 0;
+        for (auto it = rsrc_.proposal_begin();
+             it != rsrc_.proposal_end();
+             ++it, ++k)
+        {
+            auto j = *it;
+            compressed_beta_[k] = beta[j];
+        }
 
         // apply coordinate descents over proposal set
         while (1) {
@@ -201,8 +207,14 @@ public:
         } // end for - coordinate descent
 
         // update gradient on all other non-proposed components
-        compressed_beta_(Eigen::seqN(0, rsrc_.n_proposal())) -=
-            rsrc_.beta_proposal(beta);
+        k = 0;
+        for (auto it = rsrc_.proposal_begin();
+             it != rsrc_.proposal_end();
+             ++it, ++k)
+        {
+            auto j = *it;
+            compressed_beta_[k] -= beta[j];
+        }
 
         // TODO: maybe optimize if proposal_set is small enough,
         // then just cache grad components for proposal and 
