@@ -1,17 +1,24 @@
 #include <benchmark/benchmark.h>
 #include <Eigen/Core>
-#include <glmnetpp_bits/core/lasso.hpp>
+#include <glmnetpp_bits/core/elastic_net_impl_default.hpp>
+#include <glmnetpp_bits/core/as_fit_gaussian.hpp>
+#include <glmnetpp_bits/core/update_resource_gaussian.hpp>
 #include <testutil/data_util.hpp>
 #include <ctime>
 #include <string>
 
 namespace glmnetpp {
+namespace core {
 
 struct lasso_stress_fixture : benchmark::Fixture
 {
     Eigen::MatrixXd X;
     Eigen::VectorXd y;
     ElasticNetConfig config;
+    using fit_t = ASFit<util::method_type::gaussian_cov,
+                        UpdateResource<util::method_type::gaussian_cov,
+                                       double> >;
+    using lasso_t = ElasticNetImplDefault<fit_t>;
 };
 
 BENCHMARK_DEFINE_F(lasso_stress_fixture,
@@ -32,8 +39,8 @@ BENCHMARK_DEFINE_F(lasso_stress_fixture,
     state.counters["p"] = p;
 
     for (auto _ : state) {
-        auto model = Lasso(config);
-        auto out = model.lasso_path(X, y);
+        auto model = lasso_t(config);
+        auto out = model.fit_path(X, y);
     }
 }
 
@@ -45,4 +52,5 @@ BENCHMARK_REGISTER_F(lasso_stress_fixture,
         })
     ;
 
+} // namespace core
 } // namespace glmnetpp

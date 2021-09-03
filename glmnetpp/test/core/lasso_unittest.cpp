@@ -1,13 +1,22 @@
 #include <testutil/base_fixture.hpp>
 #include <testutil/data_util.hpp>
-#include <glmnetpp_bits/core/lasso.hpp>
 #include <Eigen/Core>
+#include <glmnetpp_bits/core/elastic_net_impl_default.hpp>
+#include <glmnetpp_bits/core/as_fit_gaussian.hpp>
+#include <glmnetpp_bits/core/update_resource_gaussian.hpp>
 
 namespace glmnetpp {
+namespace core {
 
 struct lasso_fixture : base_fixture
 {
 protected:
+
+    using fit_t = ASFit<::glmnetpp::util::method_type::gaussian_cov,
+                        UpdateResource<::glmnetpp::util::method_type::gaussian_cov,
+                                       value_t>
+                        >;
+    using lasso_t = ElasticNetImplDefault<fit_t>;
 
     enum class init_type
     {
@@ -18,15 +27,15 @@ protected:
     Eigen::MatrixXd X;
     Eigen::VectorXd y;
     ElasticNetConfig config;
-    std::unique_ptr<Lasso> lasso_ptr;
-    util::index_t n, p;
+    std::unique_ptr<lasso_t> lasso_ptr;
+    ::glmnetpp::util::index_t n, p;
 
     void setup(uint32_t max_iter,
                uint32_t nlambda)
     {
         config.max_iter = max_iter;
         config.nlambda = nlambda;
-        lasso_ptr.reset(new Lasso(config));
+        lasso_ptr.reset(new lasso_t(config));
         auto& int_param = lasso_ptr->get_internal();
 
         // make thresholds more stringent to test accuracy
@@ -83,7 +92,7 @@ TEST_F(lasso_fixture, lasso_path_one_step_two_lmda)
     setup(1, 2);
     initialize_data(init_type::fixed);
 
-    auto output = lasso_ptr->lasso_path(X, y);
+    auto output = lasso_ptr->fit_path(X, y);
 
     // first column should always be 0
     Eigen::MatrixXd expected(p, 2);
@@ -99,7 +108,7 @@ TEST_F(lasso_fixture, lasso_path_two_step_two_lmda)
     setup(2, 2);
     initialize_data(init_type::fixed);
 
-    auto output = lasso_ptr->lasso_path(X, y);
+    auto output = lasso_ptr->fit_path(X, y);
 
     // first column should always be 0
     Eigen::MatrixXd expected(p, 2);
@@ -115,7 +124,7 @@ TEST_F(lasso_fixture, lasso_path_five_lmda)
     setup(10000, 5);
     initialize_data(init_type::fixed);
 
-    auto output = lasso_ptr->lasso_path(X, y);
+    auto output = lasso_ptr->fit_path(X, y);
 
     // first column should always be 0
     Eigen::MatrixXd expected(p, 5);
@@ -131,7 +140,7 @@ TEST_F(lasso_fixture, lasso_path_ten_lmda)
     setup(10000, 10);
     initialize_data(init_type::fixed);
 
-    auto output = lasso_ptr->lasso_path(X, y);
+    auto output = lasso_ptr->fit_path(X, y);
 
     // first column should always be 0
     Eigen::MatrixXd expected(p, 10);
@@ -164,7 +173,7 @@ TEST_F(lasso_fixture, lasso_path_random_one_step_two_lmda)
     setup(1, 2);
     initialize_data(init_type::random);
 
-    auto output = lasso_ptr->lasso_path(X, y);
+    auto output = lasso_ptr->fit_path(X, y);
 
     // first column should always be 0
     Eigen::MatrixXd expected(p, 2);
@@ -183,7 +192,7 @@ TEST_F(lasso_fixture, lasso_path_random_five_lmda)
     setup(10000, 5);
     initialize_data(init_type::random);
 
-    auto output = lasso_ptr->lasso_path(X, y);
+    auto output = lasso_ptr->fit_path(X, y);
 
     // first column should always be 0
     Eigen::MatrixXd expected(p, 5);
@@ -197,4 +206,5 @@ TEST_F(lasso_fixture, lasso_path_random_five_lmda)
     expect_near_mat(output.beta, expected, 1e-13);
 }
 
+} // namespace core
 } // namespace glmnetpp

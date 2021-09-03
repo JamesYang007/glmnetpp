@@ -8,6 +8,7 @@
 #include <glmnetpp_bits/util/typedefs.hpp>
 
 namespace glmnetpp {
+namespace core {
 
 struct ElasticNetConfig
 {
@@ -20,12 +21,12 @@ struct ElasticNetConfig
     util::index_t max_active = -1;           
     util::index_t max_non_zero = -1;
 
-    template <class XtyDerived>
-    inline void setup(const Eigen::MatrixBase<XtyDerived>& init_grad,
-                      uint32_t nobs)
+    inline void setup(double lambda_max,
+                      size_t nobs,
+                      size_t nvars)
     {
         auto n = nobs;
-        auto p = init_grad.size();
+        auto p = nvars;
 
         // setup uninitialized values
         lambda_min_ratio = (n < p) ? 0.01 : 1e-4;
@@ -33,15 +34,15 @@ struct ElasticNetConfig
         // if user did not initialize, by default use all the columns.
         // else, cap it at p.
         if (max_active == -1) max_active = p;
-        else max_active = std::min(max_active, p);
+        else max_active = std::min(static_cast<size_t>(max_active), p);
         if (max_non_zero == -1) max_non_zero = p;
-        else max_non_zero = std::min(max_non_zero, p);
+        else max_non_zero = std::min(static_cast<size_t>(max_non_zero), p);
 
         // setup lambda vector if not user-supplied
         // create an array of lambda values from lambda_max to lambda_min in descending order
         // evenly spaced on a log-scale.
         if (!lambda) {
-            lambda_max_ = init_grad.array().abs().maxCoeff();
+            lambda_max_ = lambda_max;
             double lambda_min = lambda_min_ratio * lambda_max_;
 		    lambda_factor_ = std::exp(
                 (std::log(lambda_min) - std::log(lambda_max_))/(nlambda-1.)
@@ -71,4 +72,5 @@ private:
 
 };
 
+} // namespace core
 } // namespace glmentpp

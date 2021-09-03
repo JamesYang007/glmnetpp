@@ -7,6 +7,7 @@ namespace glmnetpp {
 struct base_fixture : ::testing::Test
 {
 protected:
+    using value_t = double;
     using index_t = Eigen::Index;
 
     // Useful tools to test vector equality
