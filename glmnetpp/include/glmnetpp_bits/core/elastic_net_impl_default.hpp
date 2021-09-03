@@ -119,7 +119,6 @@ ElasticNetImplDefault<FitType>::fit_path(
 
     }
 
-
     return output;
 }
 
